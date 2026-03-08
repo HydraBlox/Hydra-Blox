@@ -372,28 +372,54 @@ function statusSVG(type){
   return `<div class="status-dot"><svg width="16" height="16" viewBox="0 0 16 16">${m[type]||m.offline}</svg></div>`;
 }
 
-/* ── DECORATION BUILDER ── */
-/*
-  .av-wrap is 100×100px. Deco images are 160×160 at top:-30 left:-30.
-  This centres them perfectly over the 100px avatar.
+/* ══════════════════════════════════════════
+   DECORATION SYSTEM
+   ══════════════════════════════════════════
+   A) IMAGE FILE — put in deco/ folder
+      { "file": "catuki.png", "layer": "frame" }
 
-  "frame" mode = two copies:
-    .deco-bot  z-index:-1  → behind av-wrap (which has z-index:2)
-    .deco-top  z-index:3   → in front, CSS mask punches 50px hole at image
-                             centre (80px,80px) so avatar face shows through
-*/
+   B) BUILT-IN animated — no upload needed
+      { "file": "blue-ring" }
+      Available: blue-ring | purple-ring | gold-ring | fire-ring | rainbow-ring
+   ═══════════════════════════════════════════ */
+const BUILTINS=['blue-ring','purple-ring','gold-ring','fire-ring','rainbow-ring'];
+
 function buildDeco(d){
-  if(!d||!d.file) return {bot:'',top:'',active:false};
-  const src='deco/'+d.file;
+  if(!d||!d.file) return {bot:'',top:'',canvas:false,active:false};
+  const name=d.file.trim();
+
+  if(BUILTINS.includes(name)){
+    const canvasHTML=`<canvas id="decoCanvas" width="160" height="160"
+      style="position:absolute;top:-30px;left:-30px;width:160px;height:160px;
+             pointer-events:none;z-index:3;"></canvas>`;
+    return {bot:'',top:canvasHTML,canvas:name,active:true};
+  }
+
+  const src='deco/'+name;
   const lyr=(d.layer||'frame').toLowerCase();
-  const el=(cls)=>`<img class="deco ${cls}" src="${src}" alt="" onerror="this.style.display='none'"/>`;
-  if(lyr==='frame') return {bot:el('deco-bot'), top:el('deco-top'), active:true};
-  if(lyr==='under') return {bot:el('deco-bot'), top:'', active:true};
-  return {bot:'', top:el('deco-top'), active:true};
+  const el=cls=>`<img class="deco ${cls}" src="${src}" alt="" onerror="this.style.display='none'"/>`;
+  if(lyr==='frame') return {bot:el('deco-bot'),top:el('deco-top'),canvas:false,active:true};
+  if(lyr==='under') return {bot:el('deco-bot'),top:'',canvas:false,active:true};
+  return {bot:'',top:el('deco-top'),canvas:false,active:true};
 }
+
+/* Dynamically load deco/<name>.js and run it */
+function startDecoCanvas(name){
+  /* remove old script tag if any */
+  const old=document.getElementById('decoScript');
+  if(old) old.remove();
+  const s=document.createElement('script');
+  s.id='decoScript';
+  s.src='deco/'+name+'.js?t='+Date.now();
+  document.body.appendChild(s);
+}
+
 
 /* ── RENDER ── */
 function render(p){
+  /* cancel any previous canvas loop */
+  if(window._decoRaf) cancelAnimationFrame(window._decoRaf);
+
   const card=document.getElementById('card');
   const st=(p.status?.type||'dnd').toLowerCase();
   const deco=buildDeco(p.decoration);
@@ -426,19 +452,19 @@ function render(p){
         <span>${p.nickname}</span>
       </div>
 
-      <div class="about-box">
-        <div class="about-label">About Me</div>
-        <div class="about-text">${xH(p.about||'')}</div>
-      </div>
-
       ${p.badges?.length?`
       <div class="badges-wrap">
         ${p.badges.map((b,i)=>`
-          <div class="badge-item" style="animation:up .38s ${.58+i*.055}s both;"
+          <div class="badge-item" style="animation:up .38s ${.52+i*.055}s both;"
                onclick="tip('${xQ(b.name)}','${xQ(b.image)}','${xQ(b.color||'#7c6ef7')}')">
             <img src="${b.image}" alt="${xQ(b.name)}" onerror="this.style.opacity='.25'"/>
           </div>`).join('')}
       </div>`:''}
+
+      <div class="about-box">
+        <div class="about-label">About Me</div>
+        <div class="about-text">${xH(p.about||'')}</div>
+      </div>
 
       ${p.buttons?.length?`
       <div class="buttons-wrap">
@@ -454,6 +480,9 @@ function render(p){
 
     ${p.footer?`<div class="profile-footer">${xH(p.footer)}</div>`:''}
   `;
+
+  /* start canvas animation if built-in deco */
+  if(deco.canvas) startDecoCanvas(deco.canvas);
 }
 
 /* ── TOOLTIP ── */
@@ -485,3 +514,4 @@ fetch('./data.json')
 </script>
 </body>
 </html>
+
